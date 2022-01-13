@@ -5,7 +5,7 @@ import 'neural_net.dart';
 import 'dart:developer' as developer;
 import 'dart:async';
 
-const int initialColonySize = 1;
+const int initialColonySize = 10;
 const int colonyWidth = 100;
 const int colonyHeight = 100;
 const int gridScale = 5;
@@ -32,20 +32,21 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'geniml',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
-        primarySwatch: Colors.blue,
+        // primarySwatch: Colors.grey,
+        brightness: Brightness.light,
+        primaryColor: Colors.teal,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      darkTheme: ThemeData(
+        primarySwatch: Colors.teal,
+        brightness: Brightness.dark,
+        primaryColor: Colors.teal,
+
+      ),
+      themeMode: ThemeMode.dark,
+      debugShowCheckedModeBanner: false,
+      home: const MyHomePage(title: 'geniml'),
     );
   }
 }
@@ -98,7 +99,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
-    tickNotifier = Tick(colony, const Duration(seconds: 1));
+    tickNotifier = Tick(colony, const Duration(milliseconds: 1));
   }
 
   @override
@@ -114,6 +115,7 @@ class _MyHomePageState extends State<MyHomePage> {
         // Here we take the value from the MyHomePage object that was created by
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
+        backgroundColor: Colors.teal,
       ),
       body: Center(
         // Center is a layout widget. It takes a single child and positions it
@@ -135,17 +137,10 @@ class _MyHomePageState extends State<MyHomePage> {
           // horizontal).
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            const Text(
-              'You have clicked the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
             Container(
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: Colors.black, // red as border color
+                    color: Colors.white,
                   ),
                 ),
                 child: SizedBox(

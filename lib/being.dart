@@ -14,12 +14,14 @@ final log = Logger('being');
 int _nextRandom(int min, int max) => min + _random.nextInt(max - min);
 
 class Colony {
-  List<Being> _beings = List.empty();
+  late final List<Being> _beings;
+  final int _width;
+  final int _height;
 
-  Colony(int initialBeingCount, int width, int height) {
+  Colony(int initialBeingCount, this._width, this._height) {
     log.info('colony initialize');
     _beings = List.generate(initialBeingCount, (int index) {
-      return Being(_nextRandom(0, width), _nextRandom(0, height));
+      return Being(this, _nextRandom(0, _width), _nextRandom(0, _height));
     });
   }
 
@@ -33,19 +35,45 @@ class Colony {
     }
     log.info('tick');
   }
+
+  double getEnvironmentSensor(Being being, NetworkSensor sensor) {
+    switch (sensor) {
+      case NetworkSensor.locX:
+        // log.info('locX sensor: ${being.location.x / _width}, ${being.location.x}, $_width');
+        return being.location.x / _width;
+      case NetworkSensor.locY:
+        return being.location.y / _height;
+      case NetworkSensor.boundaryDistX:
+        // TODO: Handle this case.
+        break;
+      case NetworkSensor.boundaryDist:
+        // TODO: Handle this case.
+        break;
+      case NetworkSensor.boundaryDistY:
+        // TODO: Handle this case.
+        break;
+      case NetworkSensor.age:
+        // TODO: Handle this case.
+        break;
+      case NetworkSensor.random:
+        return _random.nextDouble();
+    }
+    log.severe('Tried to get invalid sensor value: ${sensor.name}');
+    return 0;
+  }
 }
 
 class Being {
   late final Coordinate _location;
   late final BeingSkin _skin;
   late final NeuralNet _brain;
-  late final Genome _genome;
+  late final Genome genome;
 
-  Being(int x, int y) {
+  Being(Colony colony, int x, int y) {
     _location = Coordinate(x, y);
     _skin = BeingSkin(_random.nextDouble() * 360);
-    _brain = NeuralNet.staticTest();
-    _genome = Genome.random(10);
+    _brain = NeuralNet.staticTest(colony, this);
+    genome = Genome.random(10);
 
     log.info(_brain);
   }
@@ -58,6 +86,15 @@ class Being {
   void moveTo(int x, int y) {
     _location._x = x;
     _location._y = y;
+  }
+
+  void moveX(int steps) {
+    // TODO make the move functions honor the colony boundaries and check for occupation
+    _location._x += steps;
+  }
+
+  void moveY(int steps) {
+    _location._y += steps;
   }
 
   Coordinate get location {

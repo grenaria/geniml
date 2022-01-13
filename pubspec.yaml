@@ -36,6 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.2
   logging: ^1.0.2
   bit_array: ^2.2.0
+  dart_numerics: ^0.0.6
 
 dev_dependencies:
   flutter_test:

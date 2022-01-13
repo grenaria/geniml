@@ -3,6 +3,9 @@ library neural_net;
 import 'package:bit_array/bit_array.dart';
 import 'package:logging/logging.dart';
 import 'dart:math';
+import 'package:dart_numerics/dart_numerics.dart';
+
+import 'being.dart';
 
 final _random = Random();
 
@@ -67,10 +70,27 @@ enum NetworkAction {
   moveRandom,
 }
 
-class Neuron {
+abstract class Neuron {
   double _output = 0;
   double _accumulator = 0;
   bool _driven = false;
+
+  @override
+  String toString() {
+    return "Untyped";
+  }
+
+  void _reset() {
+    _accumulator = 0;
+    _output = 0;
+  }
+}
+
+class InternalNeuron extends Neuron {
+  // TODO write this
+  final List<NeuralConnection> _internalConnections = List.empty(growable: true);
+
+  void _addInternalConnection(InternalNeuron neuron, int weight) => _internalConnections.add(NeuralConnection(this, neuron, weight));
 
   @override
   String toString() {
@@ -79,9 +99,14 @@ class Neuron {
 }
 
 class SensorNeuron extends Neuron {
-  NetworkSensor _sensor;
+  final NetworkSensor _sensor;
+  final List<NeuralConnection> _internalConnections = List.empty(growable: true);
+  final List<NeuralConnection> _actionConnections = List.empty(growable: true);
 
   SensorNeuron(this._sensor);
+
+  void _addActionConnection(ActionNeuron neuron, [int? weight]) => _actionConnections.add(NeuralConnection(this, neuron, weight));
+  void _addInternalConnection(InternalNeuron neuron, [int? weight]) => _internalConnections.add(NeuralConnection(this, neuron, weight));
 
   @override
   String toString() {
@@ -90,7 +115,7 @@ class SensorNeuron extends Neuron {
 }
 
 class ActionNeuron extends Neuron {
-  NetworkAction _action;
+  final NetworkAction _action;
 
   ActionNeuron(this._action);
 
@@ -101,132 +126,145 @@ class ActionNeuron extends Neuron {
 }
 
 class NeuralConnection {
-  // ConnectionType _sourceType = ConnectionType.sensor;
-  // int _sourceNumber = 0; // TODO not sure if this needs to be an enum
-  // ConnectionType _sinkType = ConnectionType.action;
-  // int _sinkNumber = 0; // TODO same as above
-
   late final Neuron _source;
   late final Neuron _sink;
-  late final int _weight;
+  late int _weight;
 
-  NeuralConnection(this._source, this._sink, this._weight);
-
-  NeuralConnection.randomWeight(this._source, this._sink) {
-    _weight = _nextRandom(-32767, 32767);
+  NeuralConnection(this._source, this._sink, [int? weight]) {
+    _weight = weight ?? _nextRandom(-32767, 32767);
   }
 
-  double get weight {
+  double get weightAsDouble {
     return _weight.toDouble() / 8192.0;
   }
 
   @override
   String toString() {
-    // TODO: implement toString
-    return 'Neural Connection: Source[${_source}] Sink[${_sink}] Weight[${_weight}]';
+    return 'Neural Connection: Source[$_source] Sink[$_sink] Weight[$_weight]';
   }
-/*
-  This is intended to allow genetically derived integers to be used as floats for weights
-      static constexpr float f1 = 8.0;
-    static constexpr float f2 = 64.0;
-    //float weightAsFloat() { return std::pow(weight / f1, 3.0) / f2; }
-    float weightAsFloat() const { return weight / 8192.0; }
-    static int16_t makeRandomWeight() { return randomUint(0, 0xffff) - 0x8000; }
-   */
 }
 
 class NeuralNet {
-  late List<NeuralConnection> _connections;
-  late List<Neuron> _neurons;
-  late List<double> _actionLevels;
+  late Colony _colony;
+  late Being _being;
+  final List<SensorNeuron> _sensorNeurons = List.empty(growable: true);
+  final List<List<Neuron>> _internalLayers = List.empty(growable: true);
+  final List<ActionNeuron> _actionNeurons = List.empty(growable: true);
 
-  NeuralNet.staticTest() {
-    _neurons = List<Neuron>.empty(growable: true); // generate(3, (index) => Neuron());
-    _neurons.add(SensorNeuron(NetworkSensor.locX));
-    _neurons.add(SensorNeuron(NetworkSensor.random));
-    _neurons.add(ActionNeuron(NetworkAction.moveX));
-    _neurons.add(ActionNeuron(NetworkAction.moveY));
+  // late List<NeuralConnection> _connections;
+  // late List<Neuron> _neurons;
+  // late List<double> _actionLevels;
 
-    _connections = List<NeuralConnection>.empty(growable: true);
-    _connections.add(NeuralConnection.randomWeight(_neurons[0], _neurons[2]));
-    _connections.add(NeuralConnection.randomWeight(_neurons[1], _neurons[3]));
+  NeuralNet.staticTest(this._colony, this._being) {
+    _sensorNeurons.add(SensorNeuron(NetworkSensor.locX));
+    _sensorNeurons.add(SensorNeuron(NetworkSensor.random));
+    _actionNeurons.add(ActionNeuron(NetworkAction.moveX));
+    _actionNeurons.add(ActionNeuron(NetworkAction.moveY));
 
-    _actionLevels = List<double>.filled(_connections.length, 0);
+    _sensorNeurons[0]._addActionConnection(_actionNeurons[0], _randomWeight());
+    _sensorNeurons[1]._addActionConnection(_actionNeurons[1], _randomWeight());
+
+    //
+    // _connections = List<NeuralConnection>.empty(growable: true);
+    // _connections.add(NeuralConnection.randomWeight(_neurons[0], _neurons[2]));
+    // _connections.add(NeuralConnection.randomWeight(_neurons[1], _neurons[3]));
+    //
+    // // TODO need to post-process network. Cull useless neurons, mark undriven/driven neurons based on if they have inputs
+    //
+    // _actionLevels = List<double>.filled(_connections.length, 0);
   }
 
-  NeuralNet.fromGenome(Genome genome) {
+  NeuralNet.fromGenome(this._colony, this._being) {
     // TODO write this
-    _connections = List<NeuralConnection>.empty();
-    _neurons = List<Neuron>.empty();
-    _actionLevels = List<double>.empty();
+
+    // TODO need to post-process network. Cull useless neurons, mark undriven/driven neurons based on if they have inputs
   }
 
   void feedForward() {
-    _actionLevels.map((level) => 0);
-    _neurons.map((neuron) => neuron._accumulator = 0);
+    // Reset all neurons
+    for (var neuron in _actionNeurons) { neuron._reset(); }
+    for (var layer in _internalLayers) {
+      for (var neuron in layer) { neuron._reset(); }
+    }
+    for (var neuron in _sensorNeurons) {
+      neuron._reset();
+      // For sensor neuron layer calculate source strength
+      neuron._output = _colony.getEnvironmentSensor(_being, neuron._sensor);
+      // Pass it to connections
+      for (var connection in neuron._internalConnections) {
+        connection._sink._accumulator += (neuron._output * connection.weightAsDouble);
+      }
+      for (var connection in neuron._actionConnections) {
+        connection._sink._accumulator += (neuron._output * connection.weightAsDouble);
+      }
+    }
 
-    // // This container is used to return values for all the action outputs. This array
-    // // contains one value per action neuron, which is the sum of all its weighted
-    // // input connections. The sum has an arbitrary range. Return by value assumes compiler
-    // // return value optimization.
-    // std::array<float, Action::NUM_ACTIONS> actionLevels;
-    // actionLevels.fill(0.0); // undriven actions default to value 0.0
-    //
-    // // Weighted inputs to each neuron are summed in neuronAccumulators[]
-    // std::vector<float> neuronAccumulators(nnet.neurons.size(), 0.0);
-    //
-    // // Connections were ordered at birth so that all connections to neurons get
-    // // processed here before any connections to actions. As soon as we encounter the
-    // // first connection to an action, we'll pass all the neuron input accumulators
-    // // through a transfer function and update the neuron outputs in the indiv,
-    // // except for undriven neurons which act as bias feeds and don't change. The
-    // // transfer function will leave each neuron's output in the range -1.0..1.0.
-    //
-    // bool neuronOutputsComputed = false;
-    // for (Gene & conn : nnet.connections) {
-    // if (conn.sinkType == ACTION && !neuronOutputsComputed) {
-    // // We've handled all the connections from sensors and now we are about to
-    // // start on the connections to the action outputs, so now it's time to
-    // // update and latch all the neuron outputs to their proper range (-1.0..1.0)
-    // for (unsigned neuronIndex = 0; neuronIndex < nnet.neurons.size(); ++neuronIndex) {
-    // if (nnet.neurons[neuronIndex].driven) {
-    // nnet.neurons[neuronIndex].output = std::tanh(neuronAccumulators[neuronIndex]);
-    // }
-    // }
-    // neuronOutputsComputed = true;
-    // }
-    //
-    // // Obtain the connection's input value from a sensor neuron or other neuron
-    // // The values are summed for now, later passed through a transfer function
-    // float inputVal;
-    // if (conn.sourceType == SENSOR) {
-    // inputVal = getSensor((Sensor)conn.sourceNum, simStep);
-    // } else {
-    // inputVal = nnet.neurons[conn.sourceNum].output;
-    // }
-    //
-    // // Weight the connection's value and add to neuron accumulator or action accumulator.
-    // // The action and neuron accumulators will therefore contain +- float values in
-    // // an arbitrary range.
-    // if (conn.sinkType == ACTION) {
-    // actionLevels[conn.sinkNum] += inputVal * conn.weightAsFloat();
-    // } else {
-    // neuronAccumulators[conn.sinkNum] += inputVal * conn.weightAsFloat();
-    // }
-    // }
-
+    // For internal neuron layers same as sensor neurons except source strength is either bias for undriven neurons or weighted source connections
     // TODO write this
+
+
+
+    // For action neurons previous layer calculations should have set action potentials, so set their outputs
+    for (var neuron in _actionNeurons) {
+      neuron._output = tanh(neuron._accumulator);
+    }
   }
 
+  int _randomWeight() => _nextRandom(-32767, 32767);
+
   void executeActions() {
-    // TODO write this
+
+    // For movement, a number of action neurons control the actual movement. We sum up all of the outputs, apply an activation function to return a probability of movement, then convert the probability to a boolean.
+
+    double moveX = 0;
+    double moveY = 0;
+
+    for (var neuron in _actionNeurons) {
+      switch (neuron._action) {
+        case NetworkAction.moveX:
+          moveX += neuron._output;
+          break;
+        case NetworkAction.moveY:
+          moveY += neuron._output;
+          break;
+        case NetworkAction.moveRandom:
+          switch (_nextRandom(0, 3)) {
+            case 0:
+              moveX += neuron._output;
+              break;
+            case 1:
+              moveX -= neuron._output;
+              break;
+            case 2:
+              moveY += neuron._output;
+              break;
+            case 3:
+              moveY -= neuron._output;
+              break;
+          }
+          break;
+      }
+    }
+    moveX = tanh(moveX);
+    moveY = tanh(moveY);
+
+    if (moveX.abs() > _random.nextDouble()) {
+      _being.moveX(moveX < 0 ? -1 : 1);
+    }
+
+    if (moveY.abs() > _random.nextDouble()) {
+      _being.moveY(moveY < 0 ? -1 : 1);
+    }
   }
 
   @override
   String toString() {
     var buffer = StringBuffer()
-      ..write('Neural Network\n')
-      ..writeAll(_connections, '\n');
+      ..write('Neural Network\n\nSensor Neurons\n')
+      ..writeAll(_sensorNeurons, '\n')
+      // TODO write out internal neurons
+      ..write('\nActionNeurons\n')
+      ..writeAll(_actionNeurons, '\n');
     return buffer.toString();
   }
 }
