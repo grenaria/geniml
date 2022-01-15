@@ -23,19 +23,38 @@ enum GeneType {
   neuralConnection,
 }
 
+enum NetworkSensor {
+  locX,
+  locY,
+  boundaryDistX,
+  boundaryDist,
+  boundaryDistY,
+  age,
+  random,
+}
+
+enum NetworkAction {
+  moveX,
+  moveY,
+  moveRandom,
+}
+
 class Gene {
   final GeneType _type = GeneType.neuralConnection;
-  late final BitArray _encoding;
+  late final int _encoding;
+  // late final BitArray _encoding;
 
   Gene.random() {
-    _encoding = BitArray.parseBinary(_random.nextInt(1 << 16).toRadixString(2));
+    // _encoding = BitArray.parseBinary(_random.nextInt(1 << 16).toRadixString(2));
+    _encoding = _nextRandom(0, 1 << 32);
   }
 
   @override
   String toString() {
     // BitArray test = BitArray.parseBinary('0100110000001111');
 
-    return _encoding.byteBuffer.asInt32List().first.toRadixString(16).padLeft(4, '0');
+    return _encoding.toRadixString(16).padLeft(8, '0');
+    // return _encoding.byteBuffer.asInt32List().first.toRadixString(16).padLeft(4, '0');
   }
 }
 
@@ -52,22 +71,6 @@ class Genome {
       ..writeAll(_genes, ' ');
     return buffer.toString();
   }
-}
-
-enum NetworkSensor {
-  locX,
-  locY,
-  boundaryDistX,
-  boundaryDist,
-  boundaryDistY,
-  age,
-  random,
-}
-
-enum NetworkAction {
-  moveX,
-  moveY,
-  moveRandom,
 }
 
 abstract class Neuron {
@@ -156,13 +159,29 @@ class NeuralNet {
   // late List<double> _actionLevels;
 
   NeuralNet.staticTest(this._colony, this._being) {
-    _sensorNeurons.add(SensorNeuron(NetworkSensor.locX));
+    _sensorNeurons.add(SensorNeuron(NetworkSensor.boundaryDistX));
+    _sensorNeurons.add(SensorNeuron(NetworkSensor.locY));
     _sensorNeurons.add(SensorNeuron(NetworkSensor.random));
     _actionNeurons.add(ActionNeuron(NetworkAction.moveX));
     _actionNeurons.add(ActionNeuron(NetworkAction.moveY));
+    _actionNeurons.add(ActionNeuron(NetworkAction.moveRandom));
+
+    // _sensorNeurons[0]._addActionConnection(_actionNeurons[0], -3000);
+    // _sensorNeurons[0]._addActionConnection(_actionNeurons[0], -3000);
 
     _sensorNeurons[0]._addActionConnection(_actionNeurons[0], _randomWeight());
+    _sensorNeurons[0]._addActionConnection(_actionNeurons[1], _randomWeight());
+    _sensorNeurons[0]._addActionConnection(_actionNeurons[0], _randomWeight());
+    _sensorNeurons[0]._addActionConnection(_actionNeurons[1], _randomWeight());
+    _sensorNeurons[0]._addActionConnection(_actionNeurons[2], _randomWeight());
+    _sensorNeurons[1]._addActionConnection(_actionNeurons[0], _randomWeight());
     _sensorNeurons[1]._addActionConnection(_actionNeurons[1], _randomWeight());
+    _sensorNeurons[1]._addActionConnection(_actionNeurons[0], _randomWeight());
+    _sensorNeurons[1]._addActionConnection(_actionNeurons[1], _randomWeight());
+    _sensorNeurons[1]._addActionConnection(_actionNeurons[2], _randomWeight());
+    _sensorNeurons[2]._addActionConnection(_actionNeurons[0], _randomWeight());
+    _sensorNeurons[2]._addActionConnection(_actionNeurons[1], _randomWeight());
+    _sensorNeurons[2]._addActionConnection(_actionNeurons[2], _randomWeight());
 
     //
     // _connections = List<NeuralConnection>.empty(growable: true);
@@ -174,10 +193,63 @@ class NeuralNet {
     // _actionLevels = List<double>.filled(_connections.length, 0);
   }
 
-  NeuralNet.fromGenome(this._colony, this._being) {
-    // TODO write this
+  NeuralNet.fromGenome(this._colony, this._being, int internalCount, {int layers = 1}) {
+    Map sensorMap = {};
+    Map actionMap = {};
 
-    // TODO need to post-process network. Cull useless neurons, mark undriven/driven neurons based on if they have inputs
+    // TODO support for multiple layers
+    for (var gene in _being.genome._genes) {
+      if (gene._type == GeneType.neuralConnection) {
+        bool sourceSensor = (0x80000000 & gene._encoding > 0); // Neuron connection sources are either sensor or internal neuron, first bit in gene is coded to source type
+        int sourceNumber = (0x7f000000 & gene._encoding) >> 24; // Next 7 bits determine which source to choose, this will be modded against the actual number based on the source type
+        bool sinkAction = (0x00800000 & gene._encoding > 0); // Neuron connection sinks are either action or internal neuron, next bit in gene is coded to sink type
+        int sinkNumber = (0x007f0000 & gene._encoding) >> 16; // Next 7 bits determine which sink to choose, this will be modded against the actual number based on the sink type
+        int weight = (0x00007fff & gene._encoding) * (0x00008000 & gene._encoding > 0 ? -1 : 1); // Next 16 bits are the signed connection weight
+
+        log.info('$sourceSensor ${sourceNumber.toRadixString(16)} $sinkAction ${sinkNumber.toRadixString(16)} $weight');
+        if (sourceSensor) {
+          sourceNumber %= NetworkSensor.values.length;
+          NetworkSensor sensorType = NetworkSensor.values[sourceNumber];
+          SensorNeuron sourceNeuron;
+
+          if (!sensorMap.containsKey(sensorType)) {
+            sourceNeuron = SensorNeuron(sensorType);
+            sensorMap[sensorType] = sourceNeuron;
+            _sensorNeurons.add(sourceNeuron);
+          } else {
+            sourceNeuron = sensorMap[sensorType];
+          }
+
+          if (sinkAction) {
+            // Gene encodes to source -> action
+            sinkNumber %= NetworkAction.values.length;
+            NetworkAction actionType = NetworkAction.values[sinkNumber];
+            ActionNeuron actionNeuron;
+
+            if (!actionMap.containsKey(actionType)) {
+              actionNeuron = ActionNeuron(actionType);
+              actionMap[actionType] = actionNeuron;
+              _actionNeurons.add(actionNeuron);
+            } else {
+              actionNeuron = actionMap[actionType];
+            }
+
+            sourceNeuron._addActionConnection(actionNeuron, weight);
+          } else {
+            // Gene encodes to source -> internal
+            // TODO internal neuron support
+          }
+        } else {
+          sourceNumber %= internalCount;
+          // TODO internal neuron support
+        }
+        // NetworkSensor
+        log.info('$sourceSensor ${sourceNumber.toRadixString(16)} $sinkAction ${sinkNumber.toRadixString(16)} $weight');
+
+        // TODO cull internal loops
+        // TODO umark undriven/driven internal neurons based on if they have inputs (e.g. bias neurons)
+      }
+    }
   }
 
   void feedForward() {
@@ -228,7 +300,7 @@ class NeuralNet {
           moveY += neuron._output;
           break;
         case NetworkAction.moveRandom:
-          switch (_nextRandom(0, 3)) {
+          switch (_nextRandom(0, 4)) {
             case 0:
               moveX += neuron._output;
               break;

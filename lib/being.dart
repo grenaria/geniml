@@ -33,7 +33,7 @@ class Colony {
     for (var being in _beings) {
       being.tick();
     }
-    log.info('tick');
+    // log.info('tick');
   }
 
   double getEnvironmentSensor(Being being, NetworkSensor sensor) {
@@ -44,15 +44,14 @@ class Colony {
       case NetworkSensor.locY:
         return being.location.y / _height;
       case NetworkSensor.boundaryDistX:
-        // TODO: Handle this case.
-        break;
+        return ((_width - 1) - being.location.x) / (_width - 1);
       case NetworkSensor.boundaryDist:
-        // TODO: Handle this case.
-        break;
+        return min(((_width - 1) - being.location.x) / (_width - 1), ((_height - 1) - being.location.y) / (_height - 1));
       case NetworkSensor.boundaryDistY:
-        // TODO: Handle this case.
-        break;
+        return ((_height - 1) - being.location.y) / (_height - 1);
       case NetworkSensor.age:
+        if (being.age > 10000) return 1;
+        return being.age / 10000;
         // TODO: Handle this case.
         break;
       case NetworkSensor.random:
@@ -61,6 +60,11 @@ class Colony {
     log.severe('Tried to get invalid sensor value: ${sensor.name}');
     return 0;
   }
+
+  bool isOpenSpace(int x, int y) {
+    // TODO handle collisions
+    return x > 0 && y > 0 && x < _width && y < _height;
+  }
 }
 
 class Being {
@@ -68,33 +72,39 @@ class Being {
   late final BeingSkin _skin;
   late final NeuralNet _brain;
   late final Genome genome;
+  late final Colony _colony;
+  int age = 0;
 
-  Being(Colony colony, int x, int y) {
+  Being(this._colony, int x, int y) {
     _location = Coordinate(x, y);
     _skin = BeingSkin(_random.nextDouble() * 360);
-    _brain = NeuralNet.staticTest(colony, this);
-    genome = Genome.random(10);
+    genome = Genome.random(6);
+    _brain = NeuralNet.fromGenome(_colony, this, 5);
 
+    log.info(genome);
     log.info(_brain);
   }
 
   void tick() {
     _brain.feedForward();
     _brain.executeActions();
+    age++;
   }
 
   void moveTo(int x, int y) {
-    _location._x = x;
-    _location._y = y;
+    if (_colony.isOpenSpace(x, y)) {
+      _location._x = x;
+      _location._y = y;
+    }
   }
 
   void moveX(int steps) {
+    moveTo(_location._x + steps, _location._y);
     // TODO make the move functions honor the colony boundaries and check for occupation
-    _location._x += steps;
   }
 
   void moveY(int steps) {
-    _location._y += steps;
+    moveTo(_location._x, _location._y + steps);
   }
 
   Coordinate get location {

@@ -5,9 +5,9 @@ import 'neural_net.dart';
 import 'dart:developer' as developer;
 import 'dart:async';
 
-const int initialColonySize = 10;
-const int colonyWidth = 100;
-const int colonyHeight = 100;
+const int initialColonySize = 30;
+const int colonyWidth = 150;
+const int colonyHeight = 150;
 const int gridScale = 5;
 
 final log = Logger('main');
@@ -99,7 +99,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
-    tickNotifier = Tick(colony, const Duration(milliseconds: 1));
+    tickNotifier = Tick(colony, const Duration(milliseconds: 10));
   }
 
   @override
@@ -174,7 +174,7 @@ class ColonyPainter extends CustomPainter {
 
     for (var being in colony.beings) {
       paint.color = HSLColor.fromAHSL(1, being.skin.hue, .7, .5).toColor();
-      canvas.drawCircle(Offset(scaleInt(being.location.x) + gridScale, scaleInt(being.location.y) + gridScale), scaleInt(1), paint);
+      canvas.drawCircle(Offset(scaleInt(being.location.x), scaleInt(being.location.y)), scaleInt(1), paint);
     }
   }
 
